@@ -1,0 +1,669 @@
+{
+  "version": "v1",
+  "frozen_at": "2026-08-13",
+  "notes": [
+    "Live HF tools replaced plan names model_search/dataset_search/hf_doc_search with hub_repo_search + hub_repo_details.",
+    "hf_fs exists but is excluded from v1 (obese filesystem grammar; docs search lives there).",
+    "Train only these tools. Full dumps in dump/ are for schema-tax measurement."
+  ],
+  "tool_count": 14,
+  "missing": [],
+  "tools": [
+    {
+      "server": "wandb",
+      "name": "list_entities_tool",
+      "description": "List W&B entities (username + teams) the current API key has access to. Returns entity names and types WITHOUT listing projects (fast, lightweight). <when_to_use> Call this FIRST when: - The user hasn't specified which entity (username or team) to use - You need to discover available entities before querying projects or data - The user asks \"what teams do I have?\" or \"what's my entity?\" After getting entity names, call list_entity_projects with a SPECIFIC entity to get that entity's projects. </when_to_use> <critical_info> This is a discovery-only tool. It does NOT list projects. Use list_entity_projects(entity=\"<name>\") to get projects for a specific entity. </critical_info> Returns ------- JSON with: - entities: list of {name, type} where type is \"user\" or \"team\" - count: total number of entities",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 205
+    },
+    {
+      "server": "wandb",
+      "name": "query_wandb_entity_projects",
+      "description": "List projects for a W&B entity (username or team). <when_to_use> Call this when the user has specified an entity but needs to find a project name, or when queries fail due to \"project not found\" errors. Preferred workflow: 1. Call list_entities first to discover available entity names 2. Call this tool with entity=\"<specific name>\" to list that entity's projects </when_to_use> <critical_info> Always pass a specific entity name when possible. If entity is omitted, only the first 5 entities are listed with up to max_projects each to avoid overwhelming the response. Use list_entities for full entity discovery. </critical_info> Parameters ---------- entity : str, optional W&B entity (username or team name). If omitted, lists projects for the current user + up to 5 teams (bounded). max_projects : int, optional Maximum projects to return per entity. Default: 50, max: 200. Returns ------- JSON with: - projects: dict mapping entity name -> list of project objects - truncated: whether any entity's project list was capped",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Entity"
+          },
+          "max_projects": {
+            "default": 50,
+            "title": "Max Projects",
+            "type": "integer"
+          }
+        },
+        "title": "query_wandb_entity_projectsArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 293
+    },
+    {
+      "server": "wandb",
+      "name": "probe_project_tool",
+      "description": "Probe a W&B project to discover its structure before querying. Samples runs to discover available metric keys, config keys, tags, groups, and provides recommended query strategies. This is the run-side equivalent of infer_trace_schema_tool (which is for Weave traces). <when_to_use> Call FIRST when working with a new project to understand what data is available before making specific queries. Essential for: - Discovering which metrics are logged (loss, accuracy, custom metrics) - Finding config keys (learning_rate, model, batch_size) - Understanding project scale (run count, typical step counts) - Getting query strategy recommendations Typical workflow: 1. probe_project_tool to discover structure 2. query_wandb_tool or get_run_history_tool with the discovered keys 3. create_wandb_report_tool to visualize </when_to_use> Parameters ---------- entity_name : str W&B entity (username or team). project_name : str W&B project name. sample_runs : int, optional Number of runs to sample for key discovery. Default: 5. Returns ------- JSON with run_count, metric_keys, config_keys, has_history, typical_steps, tags, groups, and recommendations.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entity_name": {
+            "title": "Entity Name",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "sample_runs": {
+            "default": 5,
+            "title": "Sample Runs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entity_name",
+          "project_name"
+        ],
+        "title": "probe_project_toolArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 312
+    },
+    {
+      "server": "wandb",
+      "name": "get_run_history_tool",
+      "description": "Retrieve sampled time-series metric data from a W&B run. Returns step-indexed rows of logged metrics (loss, accuracy, learning_rate, etc.) for a specific run. The data is sampled to `samples` evenly-spaced points so even runs with millions of steps return a manageable response. <when_to_use> Call this tool when the user asks about training curves, metric trends over time, loss plots, or any time-series data logged to a W&B run. This is the only tool that provides step-by-step metric history -- query_wandb_tool returns run-level summary metrics but not the full training history. Typical workflow: 1. Use query_wandb_tool to find runs and their summary metrics. 2. Use get_run_history_tool to drill into a specific run's training curves. 3. Use create_wandb_report_tool to visualize the results. </when_to_use> Parameters ---------- entity_name : str The W&B entity (team or username). project_name : str The W&B project name. run_id : str The 8-character W&B run ID (e.g., \"gtng2y4l\"). This is the short ID, not the display name. keys : list of str, optional Specific metric keys to retrieve (e.g., [\"loss\", \"val_loss\", \"accuracy\"]). If empty, returns all logged keys (can be large). samples : int, optional Number of evenly-spaced sample points to return. Defaults to 500. Use fewer samples for quick overviews, more for detailed analysis. min_step : int, optional Minimum step to include. Defaults to None (start from beginning). max_step : int, optional Maximum step to include. Defaults to None (include all steps). Returns ------- JSON with: - rows: list of {_step, key1, key2, ...} dicts - run_id: the queried run ID - run_name: the run's display name - total_steps: last logged step number - sampled_points: number of rows returned - keys_returned: list of metric keys in the response Examples -------- >>> get_run_history_tool(\"my-team\", \"my-project\", \"gtng2y4l\", keys=[\"loss\", \"val_loss\"]) >>> get_run_history_tool(\"my-team\", \"my-project\", \"h0fm5qp5\", samples=100)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entity_name": {
+            "title": "Entity Name",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Keys"
+          },
+          "samples": {
+            "default": 500,
+            "title": "Samples",
+            "type": "integer"
+          },
+          "min_step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min Step"
+          },
+          "max_step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Step"
+          }
+        },
+        "required": [
+          "entity_name",
+          "project_name",
+          "run_id"
+        ],
+        "title": "get_run_history_toolArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 645
+    },
+    {
+      "server": "wandb",
+      "name": "compare_runs_tool",
+      "description": "Compare two W&B runs side-by-side. Returns config differences, summary metric deltas, and metadata comparison. <when_to_use> Call when the user asks \"what changed between run A and B?\", \"which run is better?\", or wants to understand why two runs have different performance. Typical workflow: 1. query_wandb_tool or get_run_history_tool to identify the two runs 2. compare_runs_tool to see what differs 3. create_wandb_report_tool to visualize the comparison </when_to_use> Parameters ---------- entity_name : str W&B entity (username or team). project_name : str W&B project name. run_id_a : str First run ID. run_id_b : str Second run ID. include_history_overlap : bool, optional If True, sample both runs' history and return aligned rows. Default: False. history_keys : list of str, optional Specific metric keys to compare in history. If None, uses common keys. history_samples : int, optional Number of history samples per run. Default: 50. Returns ------- JSON with config_diff, summary_diff, metadata_diff, and optional history_comparison.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entity_name": {
+            "title": "Entity Name",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "run_id_a": {
+            "title": "Run Id A",
+            "type": "string"
+          },
+          "run_id_b": {
+            "title": "Run Id B",
+            "type": "string"
+          },
+          "include_history_overlap": {
+            "default": false,
+            "title": "Include History Overlap",
+            "type": "boolean"
+          },
+          "history_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "History Keys"
+          },
+          "history_samples": {
+            "default": 50,
+            "title": "History Samples",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entity_name",
+          "project_name",
+          "run_id_a",
+          "run_id_b"
+        ],
+        "title": "compare_runs_toolArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 391
+    },
+    {
+      "server": "wandb",
+      "name": "diagnose_run_tool",
+      "description": "Diagnose a W&B run's training health. Automatically detects convergence, overfitting, NaN values, and provides tail statistics. Returns actionable recommendations. <when_to_use> Call when the user asks \"is my run okay?\", \"has it converged?\", \"is it overfitting?\", or wants a health check on a training run. This tool samples the run's history and applies standard ML diagnostic heuristics. Use get_run_history_tool for raw metric data instead. </when_to_use> Parameters ---------- entity_name : str W&B entity (username or team). project_name : str W&B project name. run_id : str The run to diagnose. loss_key : str, optional Name of the loss metric. Auto-detected if not provided. val_loss_key : str, optional Name of the validation loss metric. Auto-detected if not provided. Returns ------- JSON with diagnosis (converged/diverging/plateaued/insufficient_data), overfit_signal, nan_warnings, tail_stats, and recommendations.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entity_name": {
+            "title": "Entity Name",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "loss_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Loss Key"
+          },
+          "val_loss_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Val Loss Key"
+          }
+        },
+        "required": [
+          "entity_name",
+          "project_name",
+          "run_id"
+        ],
+        "title": "diagnose_run_toolArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 336
+    },
+    {
+      "server": "wandb",
+      "name": "search_wandb_docs_tool",
+      "description": "Search official W&B documentation for API usage, code examples, and guides. <when_to_use> Call when you need to know HOW to use a W&B/Weave feature or API. Searches docs.wandb.ai. </when_to_use> Parameters ---------- query : str Natural language search query about W&B documentation. Returns ------- str Relevant documentation snippets matching the query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "search_wandb_docs_toolArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 121
+    },
+    {
+      "server": "wandb",
+      "name": "list_artifact_versions_tool",
+      "description": "List versions of an artifact collection from a project or registry. Returns version numbers, aliases, tags, sizes, and state for each version. <when_to_use> Call this when the user wants to see available versions of a model, dataset, or other artifact collection. Works with both project-level artifacts and registry collections. Use the version identifiers in get_artifact_details_tool or compare_artifact_versions_tool. Typical workflow: 1. list_registries_tool → list_registry_collections_tool → list_artifact_versions_tool (for registry artifacts) 2. query_wandb_entity_projects → list_artifact_versions_tool (for project-level artifacts) </when_to_use> <critical_info> For source=\"project\", the W&B SDK requires a fully qualified artifact path. You can EITHER pass collection_name as \"entity/project/artifact-name\" OR pass entity_name + project_name separately and a bare collection_name. For source=\"registry\", just pass the unqualified collection name. </critical_info> Parameters ---------- collection_name : str For project source: \"entity/project/artifact-name\" (fully qualified) or just \"artifact-name\" if entity_name and project_name are also provided. For registry source: unqualified collection name (e.g., \"sentiment-classifier\"). entity_name : str, optional W&B entity. Used to qualify collection_name when source=\"project\" and collection_name is not already fully qualified. project_name : str, optional W&B project. Used to qualify collection_name when source=\"project\" and collection_name is not already fully qualified. registry_name : str, optional Registry name. Required when source=\"registry\". organization : str, optional W&B organization name. Only used when source=\"registry\". type_name : str, optional Artifact type (e.g., \"model\", \"dataset\"). Required for project source. source : str, optional \"project\" (default) or \"registry\". Determines the API path. max_items : int, optional Maximum versions to return. Default: 50, max: 200. Returns ------- JSON with: - collection: the queried collection name - source: \"project\" or \"registry\" - versions: list of version objects with version, aliases, tags, size, etc. - count: number of versions returned - truncated: whether more versions exist beyond max_items",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "collection_name": {
+            "title": "Collection Name",
+            "type": "string"
+          },
+          "entity_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Entity Name"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Project Name"
+          },
+          "registry_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Registry Name"
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Organization"
+          },
+          "type_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Type Name"
+          },
+          "source": {
+            "default": "project",
+            "title": "Source",
+            "type": "string"
+          },
+          "max_items": {
+            "default": 50,
+            "title": "Max Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "collection_name"
+        ],
+        "title": "list_artifact_versions_toolArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 666
+    },
+    {
+      "server": "wandb",
+      "name": "get_artifact_details_tool",
+      "description": "Get full details for a specific artifact version including metadata and lineage. Returns metadata, aliases, tags, and lineage (which run created it, which runs consumed it, linked artifacts) for a specific artifact version. <when_to_use> Call this when the user wants to inspect a specific artifact version: its metadata, who created it, what depends on it, or its file contents. For comparing two versions side-by-side, use compare_artifact_versions_tool instead. </when_to_use> <critical_info> artifact_name must include a version or alias qualifier: - \"entity/project/name:v3\" (by version number) - \"entity/project/name:latest\" (by alias) Without a qualifier, the API will default to \"latest\". Lineage calls (logged_by, used_by) make additional network requests and may return null if the source run has been deleted. </critical_info> Parameters ---------- artifact_name : str Fully qualified artifact name with version or alias (e.g., \"my-team/my-project/my-model:v3\"). type_name : str, optional Artifact type hint for disambiguation. include_files : bool, optional Whether to include the file manifest. Default: False. max_files : int, optional Maximum files to include when include_files is True. Default: 50. Returns ------- JSON with: - artifact: core properties (name, type, version, state, metadata, etc.) - lineage: logged_by run, used_by runs, source_artifact, linked_artifacts - files: (only when include_files=True) list of {name, size, digest}",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "artifact_name": {
+            "title": "Artifact Name",
+            "type": "string"
+          },
+          "type_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Type Name"
+          },
+          "include_files": {
+            "default": false,
+            "title": "Include Files",
+            "type": "boolean"
+          },
+          "max_files": {
+            "default": 50,
+            "title": "Max Files",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artifact_name"
+        ],
+        "title": "get_artifact_details_toolArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 426
+    },
+    {
+      "server": "wandb",
+      "name": "compare_artifact_versions_tool",
+      "description": "Compare two artifact versions side-by-side. Shows metadata diff, alias/tag changes, size delta, file changes, and lineage differences between two artifact versions. <when_to_use> Call this when the user asks \"what changed between version X and version Y\" of a model, dataset, or any artifact. Both versions can be from the same collection or from different collections/projects. </when_to_use> <critical_info> Both artifact names must include version or alias qualifiers. The diff is directional: artifact_name_a is the \"before\" and artifact_name_b is the \"after\". File-level diff compares file names and digests. Set include_file_diff=False to skip file comparison for large artifacts with many files. For artifacts with more than 1000 files, only the first 1000 files per artifact are scanned — files beyond that limit will not appear in the diff. The \"truncated\" flag in file_diff is set when this occurs. </critical_info> Parameters ---------- artifact_name_a : str Fully qualified name of the \"before\" artifact (e.g., \"team/proj/model:v3\"). artifact_name_b : str Fully qualified name of the \"after\" artifact (e.g., \"team/proj/model:v7\"). type_name : str, optional Artifact type hint for disambiguation. include_file_diff : bool, optional Whether to compute file-level diff. Default: True. max_file_diff_entries : int, optional Maximum file diff entries to report. Default: 50. Returns ------- JSON with: - metadata_diff: keys added, removed, changed between versions - tags_diff / aliases_diff: set differences - size_diff / file_count_diff: numeric deltas with percent change - file_diff: files added, removed, modified (by digest), unchanged count - lineage_diff: which runs created each version - digest_match: whether the two versions have identical content digests",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "artifact_name_a": {
+            "title": "Artifact Name A",
+            "type": "string"
+          },
+          "artifact_name_b": {
+            "title": "Artifact Name B",
+            "type": "string"
+          },
+          "type_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Type Name"
+          },
+          "include_file_diff": {
+            "default": true,
+            "title": "Include File Diff",
+            "type": "boolean"
+          },
+          "max_file_diff_entries": {
+            "default": 50,
+            "title": "Max File Diff Entries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artifact_name_a",
+          "artifact_name_b"
+        ],
+        "title": "compare_artifact_versions_toolArguments"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 512
+    },
+    {
+      "server": "huggingface",
+      "name": "hub_repo_search",
+      "description": "Search Hugging Face repositories with a shared query interface. You can target models, datasets, spaces, or aggregate across multiple repo types in one call. Include links to repositories in your response.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "description": "Search term. Leave blank and specify sort + limit to browse trending or recent repositories.",
+            "type": "string"
+          },
+          "repo_types": {
+            "default": [
+              "model",
+              "dataset"
+            ],
+            "description": "Repository types to search. Defaults to [\"model\", \"dataset\"]. space uses keyword search via /api/spaces.",
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "model",
+                "dataset",
+                "space"
+              ]
+            }
+          },
+          "author": {
+            "description": "Organization or user namespace to filter by (e.g. 'google', 'meta-llama', 'huggingface').",
+            "type": "string"
+          },
+          "filters": {
+            "description": "Optional hub filter tags. Applied to each selected repo type (e.g. [\"text-generation\"], [\"language:en\"], [\"mcp-server\"]).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort": {
+            "description": "Sort order (descending): trendingScore, downloads, likes, createdAt, lastModified",
+            "type": "string",
+            "enum": [
+              "trendingScore",
+              "downloads",
+              "likes",
+              "createdAt",
+              "lastModified"
+            ]
+          },
+          "limit": {
+            "default": 20,
+            "description": "Maximum number of results to return per selected repo type",
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 322
+    },
+    {
+      "server": "huggingface",
+      "name": "hub_repo_details",
+      "description": "Get details for one or more Hugging Face repos (model, dataset, or space). Auto-detects type unless specified. For datasets, use operations: overview, dataset_structure, dataset_preview. Use dataset_structure first to discover configs, splits, sizes, and schema. Use dataset_preview only when config and split are known, unless the dataset has a single config/split.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repo_ids": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Repo IDs for (models|dataset/space) - usually in author/name format (e.g. openai/gpt-oss-120b)"
+          },
+          "repo_type": {
+            "description": "Specify lookup type; otherwise auto-detects",
+            "type": "string",
+            "enum": [
+              "model",
+              "dataset",
+              "space"
+            ]
+          },
+          "operations": {
+            "description": "Details to return. Defaults to [\"overview\"]. For datasets, prefer [\"overview\", \"dataset_structure\"] first; then call [\"dataset_preview\"] with config and split.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "overview",
+                "dataset_structure",
+                "dataset_preview"
+              ]
+            }
+          },
+          "config": {
+            "description": "Dataset Viewer config. Required for dataset_preview when the dataset has multiple config/split options. Discover via dataset_structure.",
+            "type": "string"
+          },
+          "split": {
+            "description": "Dataset Viewer split. Required for dataset_preview when the dataset has multiple config/split options. Discover via dataset_structure.",
+            "type": "string"
+          },
+          "offset": {
+            "description": "Row offset for dataset_preview. Defaults to 0.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "description": "Row count for dataset_preview. Defaults to 5 and is clamped to 1-100.",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "repo_ids"
+        ],
+        "$schema": "https://json-schema.org/draft/2020-12/schema"
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 409
+    },
+    {
+      "server": "arxiv",
+      "name": "search_papers",
+      "description": "Search for papers on arXiv with advanced filtering and query optimization. QUERY CONSTRUCTION GUIDELINES: - Use QUOTED PHRASES for exact matches: \"multi-agent systems\", \"neural networks\", \"machine learning\" - Combine related concepts with OR: \"AI agents\" OR \"software agents\" OR \"intelligent agents\" - Use field-specific searches for precision: - ti:\"exact title phrase\" - search in titles only - au:\"author name\" - search by author - abs:\"keyword\" - search in abstracts only - Use ANDNOT to exclude unwanted results: \"machine learning\" ANDNOT \"survey\" - For best results, use 2-4 core concepts rather than long keyword lists ADVANCED SEARCH PATTERNS: - Field + phrase: ti:\"transformer architecture\" for papers with exact title phrase - Multiple fields: au:\"Smith\" AND ti:\"quantum\" for author Smith's quantum papers - Exclusions: \"deep learning\" ANDNOT (\"survey\" OR \"review\") to exclude survey papers - Broad + narrow: \"artificial intelligence\" AND (robotics OR \"computer vision\") CATEGORY FILTERING (highly recommended for relevance): Computer Science: - cs.AI: Artificial Intelligence - cs.LG: Machine Learning - cs.CL: Computation and Language (NLP) - cs.CV: Computer Vision - cs.MA: Multi-Agent Systems - cs.RO: Robotics - cs.NE: Neural and Evolutionary Computing - cs.IR: Information Retrieval - cs.HC: Human-Computer Interaction - cs.CR: Cryptography and Security - cs.DB: Databases Statistics & Math: - stat.ML: Machine Learning (Statistics) - stat.AP: Applications - math.OC: Optimization and Control - math.ST: Statistics Theory Physics & Other: - quant-ph: Quantum Physics - eess.SP: Signal Processing - eess.AS: Audio and Speech Processing - physics.data-an: Data Analysis and Statistics EXAMPLES OF EFFECTIVE QUERIES: - ti:\"reinforcement learning\" with categories: [\"cs.LG\", \"cs.AI\"] - for RL papers by title - au:\"Hinton\" AND \"deep learning\" with categories: [\"cs.LG\"] - for Hinton's deep learning work - \"multi-agent\" ANDNOT \"survey\" with categories: [\"cs.MA\"] - exclude survey papers - abs:\"transformer\" AND ti:\"attention\" with categories: [\"cs.CL\"] - attention papers with transformer abstracts DATE FILTERING: Use YYYY-MM-DD format for historical research: - date_to: \"2015-12-31\" - for foundational/classic work (pre-2016) - date_from: \"2020-01-01\" - for recent developments (post-2020) - Both together for specific time periods RESULT QUALITY: Default sort is RELEVANCE (most pertinent results first). Use sort_by: \"date\" to get newest papers first. Choose relevance for focused topic searches; choose date for monitoring recent developments. RATE LIMITING: arXiv enforces a 3-second minimum between requests. This server handles that automatically. If you see a rate limit error, wait 60 seconds before retrying — do not call the tool repeatedly in a loop. TIPS FOR FOUNDATIONAL RESEARCH: - Use date_to: \"2010-12-31\" to find classic papers on BDI, SOAR, ACT-R - Combine with field searches: ti:\"BDI\" AND abs:\"belief desire intention\" - Try author searches: au:\"Rao\" AND \"BDI\" for Anand Rao's foundational BDI work",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query using quoted phrases for exact matches (e.g., '\"machine learning\" OR \"deep learning\"') or specific technical terms. Avoid overly broad or generic terms."
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum number of results to return (default: 10, max: 50). Use 15-20 for comprehensive searches."
+          },
+          "date_from": {
+            "type": "string",
+            "description": "Start date for papers (YYYY-MM-DD format). Use to find recent work, e.g., '2023-01-01' for last 2 years."
+          },
+          "date_to": {
+            "type": "string",
+            "description": "End date for papers (YYYY-MM-DD format). Use with date_from to find historical work, e.g., '2020-12-31' for older research."
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Strongly recommended: arXiv categories to focus search (e.g., ['cs.AI', 'cs.MA'] for agent research, ['cs.LG'] for ML, ['cs.CL'] for NLP, ['cs.CV'] for vision). Greatly improves relevance."
+          },
+          "sort_by": {
+            "type": "string",
+            "enum": [
+              "relevance",
+              "date"
+            ],
+            "description": "Sort results by 'relevance' (most relevant first, default) or 'date' (newest first). Use 'relevance' for focused searches, 'date' for recent developments."
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 1068
+    },
+    {
+      "server": "arxiv",
+      "name": "get_abstract",
+      "description": "Fetch the abstract and metadata of an arXiv paper by ID, WITHOUT downloading the full paper. Use this before download_paper to assess relevance and save tokens. Returns: title, authors, abstract, categories, published date, and PDF URL. Workflow tip: search_papers -> get_abstract (check relevance) -> download_paper (if needed) -> read_paper.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paper_id": {
+            "type": "string",
+            "description": "The arXiv paper ID (e.g. '2401.12345' or '2404.19756')"
+          }
+        },
+        "required": [
+          "paper_id"
+        ],
+        "additionalProperties": false
+      },
+      "in_v1": true,
+      "schema_tokens_cl100k": 136
+    }
+  ]
+}
