@@ -8,16 +8,16 @@ Dumped 2026-08-13 from live Cursor MCP `tools/list`. `mcp_auth` omitted (Cursor 
 | Scope | Tools | Tokens |
 |---|---|---|
 | All tools (3 servers) | 50 | 27537 |
-| Frozen v1 catalog | 14 | 5842 |
-| Dropped (not trained) | 36 | 21695 |
+| Frozen v1 catalog | 11 | 4238 |
+| Dropped (not trained) | 39 | 23299 |
 
-v1 is **21.2%** of full schema tokens (21695 tokens saved vs stuffing every tool).
+v1 is **15.4%** of full schema tokens (23299 tokens saved vs stuffing every tool).
 
 ## Per server
 
 | Server | All tools | All tokens | v1 tools | v1 tokens |
 |---|---|---|---|---|
-| wandb | 30 | 22198 | 10 | 3907 |
+| wandb | 30 | 22198 | 7 | 2303 |
 | huggingface | 6 | 2440 | 2 | 731 |
 | arxiv | 14 | 2899 | 2 | 1204 |
 
@@ -33,16 +33,16 @@ v1 is **21.2%** of full schema tokens (21695 tokens saved vs stuffing every tool
 | wandb | `log_analysis_to_wandb` |  | 713 |
 | huggingface | `gr1_z_image_turbo_generate` |  | 710 |
 | wandb | `search_weave_agents_tool` |  | 687 |
-| wandb | `list_artifact_versions_tool` | yes | 666 |
+| wandb | `list_artifact_versions_tool` |  | 666 |
 | wandb | `count_weave_traces_tool` |  | 653 |
 | wandb | `query_weave_agent_spans_tool` |  | 647 |
 | wandb | `get_run_history_tool` | yes | 645 |
 | wandb | `list_wandb_automations_tool` |  | 633 |
 | wandb | `get_weave_agent_span_stats_tool` |  | 604 |
-| wandb | `compare_artifact_versions_tool` | yes | 512 |
+| wandb | `compare_artifact_versions_tool` |  | 512 |
 | wandb | `list_weave_agents_tool` |  | 497 |
 | wandb | `list_wandb_integrations_tool` |  | 471 |
-| wandb | `get_artifact_details_tool` | yes | 426 |
+| wandb | `get_artifact_details_tool` |  | 426 |
 | wandb | `resolve_trace_roots_tool` |  | 424 |
 | huggingface | `hub_repo_details` | yes | 409 |
 | wandb | `list_registries_tool` |  | 401 |
@@ -80,5 +80,5 @@ v1 is **21.2%** of full schema tokens (21695 tokens saved vs stuffing every tool
 
 - Hugging Face live names: `hub_repo_search` + `hub_repo_details`. Plan names `model_search`, `dataset_search`, `hf_doc_search` are gone.
 - `hf_fs` is the obese HF schema (filesystem grammar + docs/papers). Excluded from v1.
-- W&B Weave / GraphQL / reports / automations / registry are excluded from v1.
+- W&B Weave / GraphQL / reports / automations / registry / artifacts are excluded from v1.
 - arXiv v1 is `search_papers` + `get_abstract` only.

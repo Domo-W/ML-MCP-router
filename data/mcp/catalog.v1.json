@@ -4,7 +4,8 @@
   "notes": [
     "Live HF tools replaced plan names model_search/dataset_search/hf_doc_search with hub_repo_search + hub_repo_details.",
     "hf_fs exists but is excluded from v1 (obese filesystem grammar; docs search lives there).",
-    "Train only these tools. Full dumps in dump/ are for schema-tax measurement."
+    "Train only these tools. Full dumps in dump/ are for schema-tax measurement.",
+    "Artifact trio dropped from v1 (no train artifact paths)."
   ],
   "tool_count": 14,
   "missing": [],
@@ -375,7 +376,7 @@
         ],
         "title": "list_artifact_versions_toolArguments"
       },
-      "in_v1": true,
+      "in_v1": false,
       "schema_tokens_cl100k": 666
     },
     {
@@ -417,7 +418,7 @@
         ],
         "title": "get_artifact_details_toolArguments"
       },
-      "in_v1": true,
+      "in_v1": false,
       "schema_tokens_cl100k": 426
     },
     {
@@ -464,7 +465,7 @@
         ],
         "title": "compare_artifact_versions_toolArguments"
       },
-      "in_v1": true,
+      "in_v1": false,
       "schema_tokens_cl100k": 512
     },
     {

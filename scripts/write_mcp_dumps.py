@@ -20,9 +20,6 @@ V1 = {
         "compare_runs_tool",
         "diagnose_run_tool",
         "search_wandb_docs_tool",
-        "list_artifact_versions_tool",
-        "get_artifact_details_tool",
-        "compare_artifact_versions_tool",
     ],
     "huggingface": [
         "hub_repo_search",
@@ -91,6 +88,7 @@ def main() -> None:
             "Live HF tools replaced plan names model_search/dataset_search/hf_doc_search with hub_repo_search + hub_repo_details.",
             "hf_fs exists but is excluded from v1 (obese filesystem grammar; docs search lives there).",
             "Train only these tools. Full dumps in dump/ are for schema-tax measurement.",
+            "Artifact trio dropped from v1 (no train artifact paths).",
         ],
         "tool_count": len(catalog_tools),
         "missing": missing,
@@ -188,7 +186,7 @@ def main() -> None:
         "",
         "- Hugging Face live names: `hub_repo_search` + `hub_repo_details`. Plan names `model_search`, `dataset_search`, `hf_doc_search` are gone.",
         "- `hf_fs` is the obese HF schema (filesystem grammar + docs/papers). Excluded from v1.",
-        "- W&B Weave / GraphQL / reports / automations / registry are excluded from v1.",
+        "- W&B Weave / GraphQL / reports / automations / registry / artifacts are excluded from v1.",
         "- arXiv v1 is `search_papers` + `get_abstract` only.",
         "",
     ]
