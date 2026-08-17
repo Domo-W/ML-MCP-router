@@ -1,21 +1,24 @@
 """Stdio MCP: one tool, route_ml_tools({intent}).
 
-Load the QLoRA adapter once (on first call). Hugging Face and W&B
-HTTP sessions stay open; arXiv is stdio one-shot.
+Default generate backend is llama.cpp (GGUF via llama-server).
+Hugging Face and W&B HTTP sessions stay open; arXiv is stdio one-shot.
 
   E:/Anaconda/envs/finetuning/python.exe scripts/mcp_router.py
+  ML_ROUTER_BACKEND=llama   (default; owns llama-server)
+  ML_ROUTER_BACKEND=ollama  (already-running daemon)
+  ML_ROUTER_BACKEND=peft    (old 4-bit Transformers path)
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from eval_adapter import DEFAULT_ADAPTER, DEFAULT_MODEL, load_model  # noqa: E402
 from eval_ollama import system_prompt  # noqa: E402
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 from route_once import route  # noqa: E402
@@ -26,6 +29,32 @@ _lock = threading.Lock()
 _loaded: dict | None = None
 
 
+def _make_generate(backend: str):
+    if backend == "llama":
+        from generate_llama import generate  # noqa: PLC0415
+
+        return generate
+    if backend == "ollama":
+        from generate_ollama import generate  # noqa: PLC0415
+
+        return generate
+    if backend == "peft":
+        from eval_adapter import DEFAULT_ADAPTER, DEFAULT_MODEL, generate, load_model  # noqa: PLC0415
+
+        print(
+            f"loading {DEFAULT_MODEL} + {DEFAULT_ADAPTER} ...",
+            file=sys.stderr,
+            flush=True,
+        )
+        tokenizer, model = load_model(DEFAULT_MODEL, DEFAULT_ADAPTER)
+
+        def _peft(system: str, user: str, max_new_tokens: int):
+            return generate(tokenizer, model, system, user, max_new_tokens)
+
+        return _peft
+    raise SystemExit(f"unknown ML_ROUTER_BACKEND={backend!r} (llama|ollama|peft)")
+
+
 def _ensure_loaded() -> dict:
     global _loaded
     if _loaded is not None:
@@ -33,19 +62,15 @@ def _ensure_loaded() -> dict:
     with _lock:
         if _loaded is not None:
             return _loaded
+        backend = os.environ.get("ML_ROUTER_BACKEND", "llama")
         catalog = load_json(CATALOG)
-        print(
-            f"loading {DEFAULT_MODEL} + {DEFAULT_ADAPTER} ...",
-            file=sys.stderr,
-            flush=True,
-        )
-        tokenizer, model = load_model(DEFAULT_MODEL, DEFAULT_ADAPTER)
+        print(f"backend={backend}", file=sys.stderr, flush=True)
+        generate_fn = _make_generate(backend)
         print("ready", file=sys.stderr, flush=True)
         _loaded = {
             "catalog": catalog,
             "system": system_prompt("slm_no_schema", catalog),
-            "tokenizer": tokenizer,
-            "model": model,
+            "generate": generate_fn,
         }
         return _loaded
 
@@ -63,8 +88,7 @@ def route_ml_tools(intent: str) -> str:
     """
     state = _ensure_loaded()
     rec = route(
-        state["tokenizer"],
-        state["model"],
+        state["generate"],
         state["system"],
         state["catalog"],
         intent,

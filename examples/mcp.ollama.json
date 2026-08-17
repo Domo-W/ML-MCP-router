@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ml-router": {
+      "command": "uvx",
+      "args": ["--from", "E:/Github/FineTuning", "ml-router"],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "ML_ROUTER_BACKEND": "ollama",
+        "ML_ROUTER_OLLAMA_HOST": "http://127.0.0.1:11434",
+        "ML_ROUTER_OLLAMA_MODEL": "mcp-slm:q4km",
+        "ML_ROUTER_OLLAMA_KEEP_ALIVE": "2m",
+        "HF_TOKEN": "hf_REPLACE_ME",
+        "WANDB_API_KEY": "wandb_REPLACE_ME",
+        "ARXIV_CMD": "arxiv-mcp-server"
+      }
+    }
+  }
+}

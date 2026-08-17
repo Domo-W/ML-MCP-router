@@ -1,22 +1,24 @@
-"""Smoke the PEFT adapter: intent -> parse -> schema check.
+"""Smoke one intent: generate -> parse -> schema check.
 
-Load once. Does not call W&B / HF / arXiv.
+Default backend is llama.cpp (GGUF). Does not call W&B / HF / arXiv.
 
   python scripts/route_once.py --smoke
   python scripts/route_once.py "Is run k7m2n9p4 in train-lab/rl-benchmark overfitting?"
+  python scripts/route_once.py --backend ollama --smoke
+  python scripts/route_once.py --backend peft --smoke
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from eval_adapter import DEFAULT_ADAPTER, DEFAULT_MODEL, generate, load_model  # noqa: E402
 from eval_calls import parse_call  # noqa: E402
 from eval_ollama import system_prompt  # noqa: E402
 from validate_canonical import CATALOG, load_json, v1_names, validate_schema  # noqa: E402
@@ -33,8 +35,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("intent", nargs="?", help="one user intent")
     parser.add_argument("--smoke", action="store_true", help="run the 4 built-in prompts")
-    parser.add_argument("--adapter", type=Path, default=DEFAULT_ADAPTER)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--backend",
+        default=os.environ.get("ML_ROUTER_BACKEND", "llama"),
+        choices=("llama", "ollama", "peft"),
+    )
     parser.add_argument("--max-new-tokens", type=int, default=256)
     return parser.parse_args()
 
@@ -47,8 +52,7 @@ def prune_args(arguments: dict, schema: dict) -> dict:
 
 
 def route(
-    tokenizer,
-    model,
+    generate_fn,
     system: str,
     catalog: dict,
     intent: str,
@@ -59,7 +63,7 @@ def route(
     server_map = {t["name"]: t["server"] for t in catalog["tools"]}
 
     t0 = time.perf_counter()
-    raw, n_in = generate(tokenizer, model, system, intent, max_new_tokens)
+    raw, n_in = generate_fn(system, intent, max_new_tokens)
     ms = int((time.perf_counter() - t0) * 1000)
 
     pred = parse_call(raw)
@@ -113,12 +117,26 @@ def main() -> int:
 
     catalog = load_json(CATALOG)
     system = system_prompt("slm_no_schema", catalog)
-    print(f"loading {args.model} + {args.adapter} ...", flush=True)
-    tokenizer, model = load_model(args.model, args.adapter)
+    if args.backend == "llama":
+        from generate_llama import generate as generate_fn  # noqa: PLC0415
+
+        print("backend=llama  (llama-server + GGUF)", flush=True)
+    elif args.backend == "ollama":
+        from generate_ollama import generate as generate_fn  # noqa: PLC0415
+
+        print("backend=ollama  (localhost:11434)", flush=True)
+    else:
+        from eval_adapter import DEFAULT_ADAPTER, DEFAULT_MODEL, generate, load_model  # noqa: PLC0415
+
+        print(f"backend=peft  loading {DEFAULT_MODEL} + {DEFAULT_ADAPTER} ...", flush=True)
+        tokenizer, model = load_model(DEFAULT_MODEL, DEFAULT_ADAPTER)
+
+        def generate_fn(system: str, user: str, max_new_tokens: int):
+            return generate(tokenizer, model, system, user, max_new_tokens)
 
     failed = 0
     for intent in intents:
-        rec = route(tokenizer, model, system, catalog, intent, args.max_new_tokens)
+        rec = route(generate_fn, system, catalog, intent, args.max_new_tokens)
         print(json.dumps({"intent": intent, **rec}, ensure_ascii=False, indent=2))
         if not rec["ok"]:
             failed += 1

@@ -6,6 +6,7 @@ Writes prediction JSONL for eval_calls.py. Does not score.
   python scripts/eval_ollama.py --setup slm_v1_schema
   python scripts/eval_ollama.py --setup slm_full_schema
   python scripts/eval_ollama.py --setup slm_full_schema_post
+  python scripts/eval_ollama.py --setup slm_gguf --model mcp-slm:q4km
   python scripts/eval_calls.py --pred data/eval/slm_no_schema.jsonl
 """
 
@@ -41,6 +42,7 @@ SETUPS = (
     "slm_v1_schema",
     "slm_full_schema",
     "slm_full_schema_post",
+    "slm_gguf",
 )
 
 JSON_ONLY = (
@@ -71,7 +73,7 @@ def v1_tools(catalog: dict, names: set[str]) -> list[dict]:
 
 def system_prompt(setup: str, catalog: dict) -> str:
     names = sorted(v1_names(catalog))
-    if setup == "slm_no_schema":
+    if setup in ("slm_no_schema", "slm_gguf"):
         listed = ", ".join(names)
         return f"{JSON_ONLY} name must be one of: {listed}."
 

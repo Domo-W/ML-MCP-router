@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ml-router": {
+      "command": "uvx",
+      "args": ["--from", "E:/Github/FineTuning", "ml-router"],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "ML_ROUTER_BACKEND": "llama",
+        "ML_ROUTER_GGUF": "E:/Github/FineTuning/outputs/qwen25-3b-q4_k_m.gguf",
+        "ML_ROUTER_LLAMA_SERVER": "E:/Github/llama.cpp/build_vs2022/bin/Release/llama-server.exe",
+        "ML_ROUTER_LLAMA_PORT": "8765",
+        "HF_TOKEN": "hf_REPLACE_ME",
+        "WANDB_API_KEY": "wandb_REPLACE_ME",
+        "ARXIV_CMD": "arxiv-mcp-server"
+      }
+    }
+  }
+}
