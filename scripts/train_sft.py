@@ -148,10 +148,11 @@ def main() -> int:
         report_to="wandb",
         run_name=run_name,
         assistant_only_loss=True,
+        loss_type="nll",
         packing=False,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
-        warmup_ratio=0.05,
+        warmup_steps=0.05,
         lr_scheduler_type="cosine",
         seed=args.seed,
     )

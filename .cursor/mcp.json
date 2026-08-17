@@ -1,12 +1,21 @@
 {
-    "mcpServers": {
-      "arxiv": {
-        "command": "uvx",
-        "args": [
-          "arxiv-mcp-server",
-          "--storage-path",
-          "E:/Github/FineTuning/.arxiv-cache"
-        ]
+  "mcpServers": {
+    "arxiv": {
+      "command": "uvx",
+      "args": [
+        "arxiv-mcp-server",
+        "--storage-path",
+        "E:/Github/FineTuning/.arxiv-cache"
+      ]
+    },
+    "ml-router": {
+      "command": "E:/Anaconda/envs/finetuning/python.exe",
+      "args": [
+        "E:/Github/FineTuning/scripts/mcp_router.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
       }
     }
   }
+}
