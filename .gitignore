@@ -1,3 +1,7 @@
 PROJECT_PLAN.md
 THOUGHTS.md
 
+__pycache__/
+*.py[cod]
+*$py.class
+
