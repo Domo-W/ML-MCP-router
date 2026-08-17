@@ -2,6 +2,8 @@
 
 MCPTune-style step 3: args already sampled. The one-line draft is a
 constraint only — never stored as intent. The slot checker must pass.
+
+search_wandb_docs_tool skips the rewriter and uses a How-do-I template.
 """
 
 from __future__ import annotations
@@ -166,7 +168,7 @@ def licensed_draft(tool: str, arguments: dict) -> str:
             bits.append(f"Use {a['val_loss_key']} as the val loss.")
         return " ".join(bits)
     if tool == "search_wandb_docs_tool":
-        return f"How do I {a['query']}?"
+        return f"W&B docs lookup: {a['query']}"
     if tool == "hub_repo_search":
         types = a.get("repo_types") or ["model"]
         kind = join_and(types)
@@ -359,9 +361,26 @@ def attempts_for(tool: str, default_attempts: int) -> int:
     return default_attempts
 
 
+def looks_like_api(query: str) -> bool:
+    return "wandb." in query.lower() or "WANDB_" in query or "." in query
+
+
+def docs_intent(query: str) -> str:
+    q = query.strip()
+    low = q.lower()
+    if low.startswith(("how ", "what ", "where ", "why ")):
+        text = q if q.endswith("?") else f"{q}?"
+        return text[0].upper() + text[1:]
+    if looks_like_api(q):
+        return f"How do I use {q}?"
+    return f"How do I {q}?"
+
+
 def keep_for(tool: str, default_keep: int) -> int:
     if tool == "list_entities_tool" and default_keep >= 2:
         return max(default_keep, 5)
+    if tool == "search_wandb_docs_tool":
+        return 1
     return default_keep
 
 
@@ -374,6 +393,7 @@ def main() -> None:
     parser.add_argument("--attempts", type=int, default=3)
     parser.add_argument("--keep", type=int, default=2)
     parser.add_argument("--limit", type=int, default=0, help="process only N arg sets (0 = all)")
+    parser.add_argument("--tool", action="append", default=[], help="only these tool names (repeatable)")
     parser.add_argument("--timeout", type=float, default=300)
     parser.add_argument("--dry-run", action="store_true", help="print drafts, do not call Ollama")
     parser.add_argument("--force", action="store_true", help="ignore existing canonical.jsonl")
@@ -382,6 +402,11 @@ def main() -> None:
     arg_sets = load_jsonl(args.inp)
     if not arg_sets:
         raise SystemExit(f"no arg sets in {args.inp}")
+    if args.tool:
+        unknown = set(args.tool) - TOOL_NAMES
+        if unknown:
+            raise SystemExit(f"unknown --tool {sorted(unknown)}")
+        arg_sets = [r for r in arg_sets if r["tool"] in args.tool]
     if args.limit:
         arg_sets = arg_sets[: args.limit]
 
@@ -400,12 +425,18 @@ def main() -> None:
             slots = slots_from(row["arguments"])
             print(f"{row['id']}  {row['tool']}")
             print(f"  draft: {draft}")
+            if row["tool"] == "search_wandb_docs_tool":
+                print(f"  template: {docs_intent(row['arguments']['query'])}")
             print(f"  slots: {[v for v, _ in slots]}")
         print(f"{len(arg_sets)} drafts (dry-run, no Ollama)")
         return
 
-    ping(args.host, args.model)
-    print(f"ollama {args.model} at {args.host}  in={len(arg_sets)}  existing={len(existing)}")
+    docs_only = bool(arg_sets) and all(r["tool"] == "search_wandb_docs_tool" for r in arg_sets)
+    if not docs_only:
+        ping(args.host, args.model)
+        print(f"ollama {args.model} at {args.host}  in={len(arg_sets)}  existing={len(existing)}")
+    else:
+        print(f"docs templates  in={len(arg_sets)}  existing={len(existing)}")
 
     for i, row in enumerate(arg_sets, start=1):
         tool = row["tool"]
@@ -414,6 +445,32 @@ def main() -> None:
         have = list(kept_by_arg.get(row["id"], []))
         if len(have) >= want:
             skipped += 1
+            continue
+
+        if tool == "search_wandb_docs_tool":
+            intent = docs_intent(arguments["query"])
+            if not unique_enough(intent, have + seen_intents):
+                failed += 1
+                print(f"FAIL {row['id']} {tool}  template={intent} (duplicate)")
+                continue
+            rec = {
+                "id": f"ft-{next_id:06d}",
+                "split": row["split"],
+                "intent": intent,
+                "tool": tool,
+                "arguments": arguments,
+                "server": row["server"],
+                "source": "template",
+                "arg_id": row["id"],
+            }
+            next_id += 1
+            written += 1
+            per_tool[tool] += 1
+            seen_intents.append(intent)
+            have.append(intent)
+            kept_by_arg.setdefault(row["id"], []).append(intent)
+            append_jsonl(args.out, rec)
+            print(f"[{i}/{len(arg_sets)}] {row['id']} {tool} kept={len(have)} (template)", flush=True)
             continue
 
         draft = licensed_draft(tool, arguments)
