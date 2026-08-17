@@ -1,7 +1,7 @@
 """Stdio MCP: one tool, route_ml_tools({intent}).
 
-Load the QLoRA adapter once (on first call). Hugging Face calls are
-executed against HF_MCP_URL. W&B / arXiv still return the plan only.
+Load the QLoRA adapter once (on first call). Hugging Face and W&B
+HTTP sessions stay open; arXiv is stdio one-shot.
 
   E:/Anaconda/envs/finetuning/python.exe scripts/mcp_router.py
 """
@@ -59,7 +59,7 @@ def route_ml_tools(intent: str) -> str:
 
     Pass the user's request as intent. Returns JSON
     {ok, name, arguments, server} or {ok: false, error}.
-    Hugging Face calls are executed; W&B / arXiv return the plan only.
+    Routed calls are executed on Hugging Face, W&B, and arXiv.
     """
     state = _ensure_loaded()
     rec = route(
@@ -71,7 +71,7 @@ def route_ml_tools(intent: str) -> str:
         max_new_tokens=256,
     )
     rec.pop("raw", None)
-    if rec.get("ok") and rec.get("server") == "huggingface":
+    if rec.get("ok") and rec.get("server") in {"huggingface", "wandb", "arxiv"}:
         try:
             rec["result"] = execute(rec["server"], rec["name"], rec["arguments"])
         except Exception as exc:
