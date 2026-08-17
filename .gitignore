@@ -1,6 +1,8 @@
 PROJECT_PLAN.md
 THOUGHTS.md
-.vscode/settings.json
+
+.cursor/
+.vscode/
 
 __pycache__/
 *.py[cod]

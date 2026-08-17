@@ -14,7 +14,11 @@
         "E:/Github/FineTuning/scripts/mcp_router.py"
       ],
       "env": {
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "HF_HOME": "E:/caches/huggingface",
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+        "HF_HUB_DISABLE_SYMLINKS_WARNING": "1"
       }
     }
   }
