@@ -1,0 +1,62 @@
+{
+  "item_schema": {
+    "wandb.contexts[]": {
+      "split": "train | holdout",
+      "entity": "string",
+      "project": "string",
+      "runs": [
+        {
+          "id": "8-char wandb run id",
+          "name": "display name; never used as run_id"
+        }
+      ],
+      "artifacts": [
+        "entity/project/name:version"
+      ],
+      "metric_keys": [
+        "string"
+      ]
+    },
+    "huggingface.queries[]": {
+      "split": "train | holdout",
+      "query": "string",
+      "repo_types": [
+        "model | dataset"
+      ]
+    },
+    "huggingface.repo_ids[]": {
+      "split": "train | holdout",
+      "id": "org/name",
+      "repo_type": "model | dataset"
+    },
+    "arxiv.queries[]": {
+      "split": "train | holdout",
+      "query": "string",
+      "categories": [
+        "cs.LG"
+      ]
+    },
+    "arxiv.paper_ids[]": {
+      "split": "train | holdout",
+      "id": "YYMM.NNNNN"
+    },
+    "wandb_docs.queries[]": {
+      "split": "train | holdout",
+      "query": "string"
+    }
+  },
+  "wandb": {
+    "contexts": []
+  },
+  "huggingface": {
+    "queries": [],
+    "repo_ids": []
+  },
+  "arxiv": {
+    "queries": [],
+    "paper_ids": []
+  },
+  "wandb_docs": {
+    "queries": []
+  }
+}

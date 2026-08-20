@@ -1,0 +1,1 @@
+{"id": "ft-000001", "split": "train", "intent": "Which W&B teams or user profiles are visible to me?", "tool": "list_entities_tool", "arguments": {}, "server": "wandb", "source": "llm", "arg_id": "arg-000001"}
